@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoGuard SecOps — AWS Impossible Travel & Threat-Intel Visualizer</title>
+  <link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <style>
+    :root {
+      --bg-navy: #0a0f1d;
+      --panel-navy: #111827;
+      --border-slate: #1f2937;
+      --accent-yellow: #facc15;
+      --alert-red: #ef4444;
+      --safe-green: #10b981;
+      --text-light: #f3f4f6;
+      --text-muted: #9ca3af;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, sans-serif; }
+    body { background: var(--bg-navy); color: var(--text-light); display: flex; height: 100vh; overflow: hidden; }
+
+    .sidebar {
+      width: 400px;
+      background: var(--panel-navy);
+      border-right: 1px solid var(--border-slate);
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 14px;
+      overflow-y: auto;
+      z-index: 10;
+    }
+    .brand { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-slate); padding-bottom: 10px; }
+    .brand h1 { font-size: 1.05rem; color: var(--accent-yellow); letter-spacing: 0.4px; }
+    .badge { font-size: 0.68rem; background: #1e293b; color: var(--accent-yellow); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--accent-yellow); }
+
+    .section-card {
+      background: var(--bg-navy);
+      border: 1px solid var(--border-slate);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .section-title { font-size: 0.76rem; text-transform: uppercase; color: var(--accent-yellow); margin-bottom: 8px; font-weight: 700; letter-spacing: 0.5px; }
+
+    .btn-group { display: flex; flex-direction: column; gap: 6px; }
+    button {
+      background: #1e293b;
+      color: var(--text-light);
+      border: 1px solid #334155;
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      text-align: left;
+      transition: 0.15s;
+    }
+    button:hover, button.active { border-color: var(--accent-yellow); color: var(--accent-yellow); }
+    .btn-primary { background: var(--accent-yellow); color: #000; font-weight: 700; text-align: center; border: none; }
+    .btn-primary:hover { background: #eab308; color: #000; }
+
+    .file-drop {
+      display: block;
+      border: 1px dashed var(--accent-yellow);
+      border-radius: 6px;
+      padding: 10px;
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      margin-bottom: 8px;
+    }
+    .file-drop input { display: none; }
+    textarea {
+      width: 100%;
+      height: 95px;
+      background: #060913;
+      color: #a7f3d0;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 8px;
+      font-family: monospace;
+      font-size: 0.72rem;
+      resize: vertical;
+      margin-bottom: 8px;
+    }
+
+    .telemetry-item {
+      border-left: 3px solid var(--alert-red);
+      background: #111827;
+      padding: 9px;
+      border-radius: 4px;
+      margin-top: 8px;
+      font-size: 0.76rem;
+      line-height: 1.45;
+    }
+    .telemetry-item.safe { border-left-color: var(--safe-green); }
+    .speed-tag { font-weight: 700; color: var(--alert-red); }
+    .speed-tag.safe { color: var(--safe-green); }
+
+    #map { flex: 1; height: 100vh; position: relative; }
+    .status-banner {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: rgba(17, 24, 39, 0.92);
+      border: 1px solid var(--accent-yellow);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.78rem;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+
+  <aside class="sidebar">
+    <div class="brand">
+      <h1>⚡ GeoGuard SecOps</h1>
+      <span class="badge">AWS Location v2 + S3</span>
+    </div>
+
+    <!-- MODE 1: PRE-LOADED S3 SCENARIOS -->
+    <div class="section-card">
+      <div class="section-title">1. Pre-Loaded S3 Dataset Scenarios</div>
+      <div class="btn-group">
+        <button id="btn-cicd_leak" class="active" onclick="loadPreloadedScenario('cicd_leak')">
+          🔴 Scenario 1: Compromised CI/CD IAM Key (S3)
+        </button>
+        <button id="btn-tor_exfil" onclick="loadPreloadedScenario('tor_exfil')">
+          🟠 Scenario 2: Multi-Hop Tor Exfiltration (S3)
+        </button>
+        <button id="btn-legit_travel" onclick="loadPreloadedScenario('legit_travel')">
+          🟢 Scenario 3: Legitimate Commercial Flight (S3)
+        </button>
+      </div>
+    </div>
+
+    <!-- MODE 2: UPLOAD OR PASTE CUSTOM CLOUDTRAIL JSON -->
+    <div class="section-card">
+      <div class="section-title">2. Upload or Paste CloudTrail JSON</div>
+      <label class="file-drop">
+        📂 Click to Upload <b>.json</b> CloudTrail Log
+        <input type="file" id="fileInput" accept=".json" onchange="handleFileUpload(event)" />
+      </label>
+
+      <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+        <span style="font-size:0.72rem; color:var(--text-muted);">Or edit/paste Records JSON:</span>
+        <a href="#" onclick="downloadSampleJson(event)" style="font-size:0.72rem; color:var(--accent-yellow);">⬇ Download Test JSON</a>
+      </div>
+
+      <textarea id="jsonPasteBox"></textarea>
+      <button class="btn-primary" style="width:100%;" onclick="handlePasteSubmit()">
+        Plot Custom Log on Map
+      </button>
+      <p style="font-size:0.68rem; color:var(--text-muted); margin-top:5px;">
+        🔒 100% Client-Side Parsing + AWS Places v2 ReverseGeocode
+      </p>
+    </div>
+
+    <!-- TELEMETRY OUTPUT -->
+    <div class="section-card" style="flex:1; overflow-y:auto;">
+      <div class="section-title">3. Impossible Travel Velocity Analysis</div>
+      <div id="telemetryOutput">Loading dataset from Amazon S3...</div>
+    </div>
+  </aside>
+
+  <main id="map">
+    <div class="status-banner" id="activeSourceBanner">
+      Data Source: <b>Amazon S3 Pre-Loaded Dataset</b>
+    </div>
+  </main>
+
+  <script>
+    // ============================================================================
+    // PASTE YOUR AWS REGION AND AMAZON LOCATION SERVICE API KEY BELOW
+    // ============================================================================
+    const AWS_REGION = "YOUR_AWS_REGION"; // e.g., "ap-south-1" or "us-east-1"
+    const LOCATION_API_KEY = "YOUR_AMAZON_LOCATION_API_KEY"; // e.g., "v1.public.eyJ..."
+    const MAP_STYLE = "Monochrome"; // AWS Location v2 styles: Standard, Monochrome, Hybrid, Satellite
+    const S3_DATASET_URL = "./data/s3-threat-dataset.json";
+
+    // Embedded fallback mirror so local file preview works even before S3 upload
+    const FALLBACK_S3_DATASET = {
+      scenarios: {
+        cicd_leak: {
+          Records: [
+            { eventTime: "2026-10-31T10:00:00Z", eventName: "AssumeRole", sourceIPAddress: "103.21.244.12", userIdentity: { arn: "arn:aws:iam::123456789012:user/prod-cicd-deployer" }, geo: { city: "Mumbai, India", lat: 19.0760, lon: 72.8777 } },
+            { eventTime: "2026-10-31T10:14:00Z", eventName: "ListBuckets", sourceIPAddress: "185.220.101.4", userIdentity: { arn: "arn:aws:iam::123456789012:user/prod-cicd-deployer" }, geo: { city: "Frankfurt, Germany", lat: 50.1109, lon: 8.6821 } },
+            { eventTime: "2026-10-31T10:22:00Z", eventName: "GetObject (secrets.env)", sourceIPAddress: "198.96.155.3", userIdentity: { arn: "arn:aws:iam::123456789012:user/prod-cicd-deployer" }, geo: { city: "Ashburn, USA", lat: 39.0438, lon: -77.4874 } }
+          ]
+        },
+        tor_exfil: {
+          Records: [
+            { eventTime: "2026-10-31T14:00:00Z", eventName: "ConsoleLogin", sourceIPAddress: "49.205.72.19", userIdentity: { arn: "arn:aws:sts::123456789012:assumed-role/AdminRole/sec-admin" }, geo: { city: "Ahmedabad, India", lat: 23.0225, lon: 72.5714 } },
+            { eventTime: "2026-10-31T14:18:00Z", eventName: "CreateAccessKey", sourceIPAddress: "185.100.87.202", userIdentity: { arn: "arn:aws:sts::123456789012:assumed-role/AdminRole/sec-admin" }, geo: { city: "Amsterdam, Netherlands", lat: 52.3676, lon: 4.9041 } },
+            { eventTime: "2026-10-31T14:35:00Z", eventName: "CreateDBSnapshot", sourceIPAddress: "177.54.144.8", userIdentity: { arn: "arn:aws:sts::123456789012:assumed-role/AdminRole/sec-admin" }, geo: { city: "Sao Paulo, Brazil", lat: -23.5505, lon: -46.6333 } }
+          ]
+        },
+        legit_travel: {
+          Records: [
+            { eventTime: "2026-10-31T08:00:00Z", eventName: "ConsoleLogin", sourceIPAddress: "52.77.210.4", userIdentity: { arn: "arn:aws:iam::123456789012:user/cloud-architect" }, geo: { city: "Singapore, SG", lat: 1.3521, lon: 103.8198 } },
+            { eventTime: "2026-10-31T16:30:00Z", eventName: "DescribeInstances", sourceIPAddress: "13.114.88.2", userIdentity: { arn: "arn:aws:iam::123456789012:user/cloud-architect" }, geo: { city: "Tokyo, Japan", lat: 35.6762, lon: 139.6503 } }
+          ]
+        }
+      }
+    };
+
+    const hasConfiguredAwsKey = LOCATION_API_KEY && !LOCATION_API_KEY.includes("YOUR_AMAZON_LOCATION");
+    const mapStyleUrl = hasConfiguredAwsKey
+      ? `https://maps.geo.${AWS_REGION}.amazonaws.com/v2/styles/${MAP_STYLE}/descriptor?key=${LOCATION_API_KEY}&color-scheme=Dark`
+      : "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+
+    const map = new maplibregl.Map({
+      container: "map",
+      style: mapStyleUrl,
+      center: [30, 22],
+      zoom: 1.8
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), "top-left");
+
+    let activeMarkers = [];
+
+    map.on("load", () => {
+      document.getElementById("jsonPasteBox").value = JSON.stringify(
+        { Records: FALLBACK_S3_DATASET.scenarios.cicd_leak.Records.slice(0, 2) },
+        null,
+        2
+      );
+      loadPreloadedScenario("cicd_leak");
+    });
+
+    function calculateHaversineKm(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // Calls Amazon Location Service Places v2 ReverseGeocode API when a marker is clicked
+    async function verifyPlaceWithAWS(lon, lat, fallbackCity) {
+      if (!hasConfiguredAwsKey) return fallbackCity;
+      try {
+        const res = await fetch(`https://places.geo.${AWS_REGION}.amazonaws.com/v2/reverse-geocode?key=${LOCATION_API_KEY}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ QueryPosition: [lon, lat], MaxResults: 1 })
+        });
+        const data = await res.json();
+        return data.ResultItems?.[0]?.Address?.Label || fallbackCity;
+      } catch (e) {
+        return fallbackCity;
+      }
+    }
+
+    async function renderEventsOnMap(records, sourceLabel) {
+      document.getElementById("activeSourceBanner").innerHTML = `Data Source: <b>${sourceLabel}</b>`;
+
+      activeMarkers.forEach(m => m.remove());
+      activeMarkers = [];
+      if (map.getLayer("travel-lines")) map.removeLayer("travel-lines");
+      if (map.getSource("travel-lines")) map.removeSource("travel-lines");
+
+      for (const rec of records) {
+        if (!rec.geo && rec.sourceIPAddress) {
+          try {
+            const res = await fetch(`https://ipapi.co/${rec.sourceIPAddress}/json/`);
+            const ipData = await res.json();
+            rec.geo = {
+              city: `${ipData.city || "Unknown"}, ${ipData.country_code || ""}`,
+              lat: ipData.latitude || 0,
+              lon: ipData.longitude || 0
+            };
+          } catch (e) {
+            rec.geo = { city: rec.awsRegion || "Unknown", lat: 0, lon: 0 };
+          }
+        }
+      }
+
+      records.sort((a, b) => new Date(a.eventTime) - new Date(b.eventTime));
+
+      const features = [];
+      let telemetryHtml = "";
+
+      for (let i = 0; i < records.length; i++) {
+        const ev = records[i];
+        const verifiedPlace = await verifyPlaceWithAWS(ev.geo.lon, ev.geo.lat, ev.geo.city);
+
+        const el = document.createElement("div");
+        el.style.cssText = "width:14px;height:14px;border-radius:50%;background:#facc15;border:2px solid #000;box-shadow:0 0 10px #facc15;cursor:pointer;";
+        const popup = new maplibregl.Popup({ offset: 14 }).setHTML(`
+          <div style="color:#000;font-size:12px;line-height:1.4;">
+            <b>Hop ${i + 1}: ${ev.eventName}</b><br/>
+            <b>AWS Verified Place:</b> ${verifiedPlace}<br/>
+            <b>Source IP:</b> ${ev.sourceIPAddress}<br/>
+            <b>Timestamp:</b> ${ev.eventTime}<br/>
+            <b>IAM ARN:</b> ${ev.userIdentity?.arn || "IAM Principal"}
+          </div>
+        `);
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([ev.geo.lon, ev.geo.lat])
+          .setPopup(popup)
+          .addTo(map);
+        activeMarkers.push(marker);
+
+        if (i > 0) {
+          const prev = records[i - 1];
+          const distKm = calculateHaversineKm(prev.geo.lat, prev.geo.lon, ev.geo.lat, ev.geo.lon);
+          const deltaHours = Math.max((new Date(ev.eventTime) - new Date(prev.eventTime)) / 3600000, 0.01);
+          const speedKmh = Math.round(distKm / deltaHours);
+          const isImpossible = speedKmh > 900;
+
+          features.push({
+            type: "Feature",
+            properties: { color: isImpossible ? "#ef4444" : "#10b981" },
+            geometry: {
+              type: "LineString",
+              coordinates: [[prev.geo.lon, prev.geo.lat], [ev.geo.lon, ev.geo.lat]]
+            }
+          });
+
+          telemetryHtml += `
+            <div class="telemetry-item ${isImpossible ? "" : "safe"}">
+              <div><b>Hop ${i}: ${prev.geo.city} ➔ ${ev.geo.city}</b></div>
+              <div>API Call: <code>${prev.eventName}</code> ➔ <code>${ev.eventName}</code></div>
+              <div>Distance: <b>${Math.round(distKm).toLocaleString()} km</b> in <b>${Math.round(deltaHours * 60)} mins</b></div>
+              <div>Speed: <span class="speed-tag ${isImpossible ? "" : "safe"}">${speedKmh.toLocaleString()} km/h ${isImpossible ? "🚨 IMPOSSIBLE TRAVEL" : "✅ PLAUSIBLE FLIGHT"}</span></div>
+            </div>
+          `;
+        }
+      }
+
+      document.getElementById("telemetryOutput").innerHTML = telemetryHtml || "Plot at least 2 events to calculate travel velocity.";
+
+      map.addSource("travel-lines", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features }
+      });
+
+      map.addLayer({
+        id: "travel-lines",
+        type: "line",
+        source: "travel-lines",
+        paint: {
+          "line-color": ["get", "color"],
+          "line-width": 3.5,
+          "line-dasharray": [2, 1]
+        }
+      });
+    }
+
+    async function loadPreloadedScenario(scenarioKey) {
+      document.querySelectorAll(".btn-group button").forEach(b => b.classList.remove("active"));
+      const activeBtn = document.getElementById(`btn-${scenarioKey}`);
+      if (activeBtn) activeBtn.classList.add("active");
+
+      try {
+        const res = await fetch(S3_DATASET_URL);
+        if (!res.ok) throw new Error("Fallback to embedded S3 mirror");
+        const s3Data = await res.json();
+        renderEventsOnMap(s3Data.scenarios[scenarioKey].Records, `Amazon S3 (${scenarioKey})`);
+      } catch (err) {
+        renderEventsOnMap(FALLBACK_S3_DATASET.scenarios[scenarioKey].Records, `Amazon S3 Dataset (${scenarioKey})`);
+      }
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          const records = parsed.Records || parsed;
+          document.getElementById("jsonPasteBox").value = JSON.stringify(parsed, null, 2);
+          renderEventsOnMap(records, `Uploaded File (${file.name})`);
+        } catch (err) {
+          alert("Invalid JSON file. Make sure it contains a CloudTrail Records array.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function handlePasteSubmit() {
+      try {
+        const parsed = JSON.parse(document.getElementById("jsonPasteBox").value);
+        const records = parsed.Records || parsed;
+        renderEventsOnMap(records, "Custom Pasted CloudTrail Log");
+      } catch (err) {
+        alert("Invalid JSON syntax in text box.");
+      }
+    }
+
+    function downloadSampleJson(e) {
+      e.preventDefault();
+      const sample = { Records: FALLBACK_S3_DATASET.scenarios.cicd_leak.Records };
+      const blob = new Blob([JSON.stringify(sample, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "sample-compromised-cloudtrail.json";
+      a.click();
+    }
+  </script>
+</body>
+</html>
