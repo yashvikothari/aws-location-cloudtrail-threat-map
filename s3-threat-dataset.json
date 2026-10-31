@@ -1,0 +1,93 @@
+{
+  "datasetMetadata": {
+    "source": "Amazon S3 SecOps Lake (CloudTrail IAM Logs + Feodo Tracker C2 Feed)",
+    "lastUpdated": "2026-10-31T08:00:00Z"
+  },
+  "scenarios": {
+    "cicd_leak": {
+      "title": "Scenario 1: Compromised CI/CD IAM Key (AKIA...)",
+      "Records": [
+        {
+          "eventTime": "2026-10-31T10:00:00Z",
+          "eventName": "AssumeRole",
+          "awsRegion": "ap-south-1",
+          "sourceIPAddress": "103.21.244.12",
+          "userIdentity": { "type": "IAMUser", "arn": "arn:aws:iam::123456789012:user/prod-cicd-deployer" },
+          "geo": { "city": "Mumbai, India", "lat": 19.0760, "lon": 72.8777 }
+        },
+        {
+          "eventTime": "2026-10-31T10:14:00Z",
+          "eventName": "ListBuckets",
+          "awsRegion": "eu-central-1",
+          "sourceIPAddress": "185.220.101.4",
+          "userIdentity": { "type": "IAMUser", "arn": "arn:aws:iam::123456789012:user/prod-cicd-deployer" },
+          "geo": { "city": "Frankfurt, Germany", "lat": 50.1109, "lon": 8.6821 }
+        },
+        {
+          "eventTime": "2026-10-31T10:22:00Z",
+          "eventName": "GetObject (secrets.env)",
+          "awsRegion": "us-east-1",
+          "sourceIPAddress": "198.96.155.3",
+          "userIdentity": { "type": "IAMUser", "arn": "arn:aws:iam::123456789012:user/prod-cicd-deployer" },
+          "geo": { "city": "Ashburn, USA", "lat": 39.0438, "lon": -77.4874 }
+        }
+      ]
+    },
+    "tor_exfil": {
+      "title": "Scenario 2: Multi-Hop Tor Exit Node Exfiltration",
+      "Records": [
+        {
+          "eventTime": "2026-10-31T14:00:00Z",
+          "eventName": "ConsoleLogin",
+          "awsRegion": "ap-south-1",
+          "sourceIPAddress": "49.205.72.19",
+          "userIdentity": { "type": "AssumedRole", "arn": "arn:aws:sts::123456789012:assumed-role/AdminRole/sec-admin" },
+          "geo": { "city": "Ahmedabad, India", "lat": 23.0225, "lon": 72.5714 }
+        },
+        {
+          "eventTime": "2026-10-31T14:18:00Z",
+          "eventName": "CreateAccessKey",
+          "awsRegion": "eu-west-1",
+          "sourceIPAddress": "185.100.87.202",
+          "userIdentity": { "type": "AssumedRole", "arn": "arn:aws:sts::123456789012:assumed-role/AdminRole/sec-admin" },
+          "geo": { "city": "Amsterdam, Netherlands", "lat": 52.3676, "lon": 4.9041 }
+        },
+        {
+          "eventTime": "2026-10-31T14:35:00Z",
+          "eventName": "CreateDBSnapshot",
+          "awsRegion": "sa-east-1",
+          "sourceIPAddress": "177.54.144.8",
+          "userIdentity": { "type": "AssumedRole", "arn": "arn:aws:sts::123456789012:assumed-role/AdminRole/sec-admin" },
+          "geo": { "city": "Sao Paulo, Brazil", "lat": -23.5505, "lon": -46.6333 }
+        }
+      ]
+    },
+    "legit_travel": {
+      "title": "Scenario 3: Legitimate Commercial Flight Window",
+      "Records": [
+        {
+          "eventTime": "2026-10-31T08:00:00Z",
+          "eventName": "ConsoleLogin",
+          "awsRegion": "ap-southeast-1",
+          "sourceIPAddress": "52.77.210.4",
+          "userIdentity": { "type": "IAMUser", "arn": "arn:aws:iam::123456789012:user/cloud-architect" },
+          "geo": { "city": "Singapore, SG", "lat": 1.3521, "lon": 103.8198 }
+        },
+        {
+          "eventTime": "2026-10-31T16:30:00Z",
+          "eventName": "DescribeInstances",
+          "awsRegion": "ap-northeast-1",
+          "sourceIPAddress": "13.114.88.2",
+          "userIdentity": { "type": "IAMUser", "arn": "arn:aws:iam::123456789012:user/cloud-architect" },
+          "geo": { "city": "Tokyo, Japan", "lat": 35.6762, "lon": 139.6503 }
+        }
+      ]
+    }
+  },
+  "threatIntelNodes": [
+    { "ip": "185.220.101.4", "type": "Tor Exit / Brute Force", "city": "Frankfurt, DE", "lat": 50.1109, "lon": 8.6821 },
+    { "ip": "194.26.29.110", "type": "Feodo Botnet C2", "city": "Moscow, RU", "lat": 55.7558, "lon": 37.6173 },
+    { "ip": "45.155.205.233", "type": "GuardDuty SSH Scanner", "city": "Bucharest, RO", "lat": 44.4268, "lon": 26.1025 },
+    { "ip": "103.152.220.44", "type": "Credential Stuffing Node", "city": "Singapore, SG", "lat": 1.3521, "lon": 103.8198 }
+  ]
+}
