@@ -1,4 +1,6 @@
 #  GeoGuard SecOps: AWS Impossible Travel & CloudTrail Threat Visualizer
+<img width="1920" height="1023" alt="image" src="https://github.com/user-attachments/assets/df279759-b2e3-4c6b-99bf-9702eae3946e" />
+
 
 An interactive geospatial security dashboard built for the AWS Location Service Challenge. It transforms raw AWS CloudTrail IAM authentication logs and threat intelligence feeds into explorable geographic attack paths and real-time velocity calculations.
 
@@ -12,3 +14,5 @@ An interactive geospatial security dashboard built for the AWS Location Service 
 2. Create an Amazon Location Service API Key with `GetTile` and `ReverseGeocode` permissions.
 3. Insert your API Key and AWS Region into `index.html`.
 4. Open `index.html` in your browser or serve via a local static server.
+
+<img width="1920" height="1022" alt="image" src="https://github.com/user-attachments/assets/18077272-a7c0-4f0d-b065-7cda74562ece" />
