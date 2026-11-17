@@ -16,3 +16,5 @@ An interactive geospatial security dashboard built for the AWS Location Service 
 4. Open `index.html` in your browser or serve via a local static server.
 
 <img width="1920" height="1022" alt="image" src="https://github.com/user-attachments/assets/18077272-a7c0-4f0d-b065-7cda74562ece" />
+## Article link
+https://builder.aws.com/project/3LS4mXjXXujUve6Tes4IKlAaLBJ/cloudtrail-geo-threat-atlas-spotting-impossible-travel-with-amazon-location-service
